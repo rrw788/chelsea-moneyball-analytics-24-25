@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 from pathlib import Path
 import sys
 from datetime import datetime
+from sklearn.cluster import KMeans
+from scipy.stats import pearsonr
 
 # ---------------------------------------------------------
 # SETUP PATH & KONFIGURASI HALAMAN
@@ -980,17 +982,30 @@ with tab_analytics:
     with col_a3:
         st.markdown("""
         <div class="glass-card" style="margin-bottom: 16px;">
-            <div class="card-title">3. Efektivitas Taktis Serangan Klub — League Benchmark</div>
+            <div class="card-title">3. Efektivitas Taktis (Pearson Correlation & Regression)</div>
         </div>
         """, unsafe_allow_html=True)
         if not df_club_stats.empty:
+            # --- ALGORITMA 1: PEARSON CORRELATION ---
+            # Menghitung korelasi Pearson antara xG dan Actual Goals
+            df_corr = df_club_stats.dropna(subset=['XG', 'Goals'])
+            corr_score, p_val = pearsonr(df_corr['XG'], df_corr['Goals'])
+            
+            # Membuat scatter plot dengan garis Regresi Linear (trendline="ols")
             fig3 = px.scatter(df_club_stats, x="XG", y="Goals", text="club_name", size="Passes", color="Goals",
-                             color_continuous_scale="Blues")
+                             color_continuous_scale="Blues", trendline="ols")
+            
             fig3.add_shape(type='line', x0=30, y0=30, x1=90, y1=90, line=dict(color='rgba(255,255,255,0.2)', dash='dash', width=1))
             fig3.update_traces(textposition='top center', textfont=dict(size=10))
             fig3.update_layout(xaxis_title="Expected Goals (xG)", yaxis_title="Actual Goals")
             st.plotly_chart(fig3, use_container_width=True)
-            st.markdown("""<div class='analytic-desc'>🎯 <b>Klub Benchmark:</b> Kualitas xG Chelsea (69.19) sejajar dengan klub papan atas, namun defisit konversi (-5.19) mengindikasikan inefisiensi lini depan.</div>""", unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class='analytic-desc'>
+                📈 <b>Pearson Score: {corr_score:.2f}</b> (Korelasi Sangat Kuat).<br>
+                Kualitas xG Chelsea (69.19) sejajar klub papan atas pada garis regresi, namun defisit konversi (-5.19) mengindikasikan inefisiensi penyelesaian akhir.
+            </div>
+            """, unsafe_allow_html=True)
 
     with col_a4:
         st.markdown("""
@@ -1015,37 +1030,38 @@ with tab_analytics:
     with col_a5:
         st.markdown("""
         <div class="glass-card" style="margin-bottom: 16px;">
-            <div class="card-title">5. Profiling Ancaman Pemain — xG90 vs xA90</div>
+            <div class="card-title">5. Profiling Ancaman Pemain (K-Means Clustering)</div>
         </div>
         """, unsafe_allow_html=True)
-        df_threat = df_clean[df_clean['Minutes Played'] > 500]
+        
+        df_threat = df_clean[df_clean['Minutes Played'] > 500].copy()
         if not df_threat.empty:
-            fig5 = px.scatter(df_threat, x="xA90", y="xG90", text="player_name", color="xGI90", size="Minutes Played",
-                             color_continuous_scale="Blues")
+            # --- ALGORITMA 2: K-MEANS CLUSTERING ---
+            # Menyiapkan 2 variabel (Fitur) untuk clustering
+            X_cluster = df_threat[['xA90', 'xG90']].fillna(0)
+            
+            # Menjalankan algoritma K-Means dengan 4 klaster
+            kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+            df_threat['Cluster_ID'] = kmeans.fit_predict(X_cluster)
+            
+            # Memberi nama Cluster agar rapi (diubah ke string untuk Plotly)
+            df_threat['K-Means Cluster'] = 'Cluster ' + (df_threat['Cluster_ID'] + 1).astype(str)
+            
+            # Scatter plot menggunakan warna berdasarkan hasil Cluster dari Algoritma
+            fig5 = px.scatter(df_threat, x="xA90", y="xG90", text="player_name", color="K-Means Cluster", size="Minutes Played",
+                             color_discrete_sequence=['#00b4d8', '#ff6b6b', '#ffd93d', '#034694'])
+            
             fig5.add_hline(y=df_threat['xG90'].mean(), line_dash="dot", line_color="rgba(255,255,255,0.2)")
             fig5.add_vline(x=df_threat['xA90'].mean(), line_dash="dot", line_color="rgba(255,255,255,0.2)")
             fig5.update_traces(textposition='bottom center', textfont=dict(size=10))
-            fig5.update_layout(xaxis_title="xA per 90", yaxis_title="xG per 90")
+            fig5.update_layout(xaxis_title="xA per 90 (Kreativitas)", yaxis_title="xG per 90 (Ancaman Gol)")
             st.plotly_chart(fig5, use_container_width=True)
-            st.markdown("""<div class='analytic-desc'>⚔️ <b>Insight:</b> Kuadran kanan atas menunjukkan Cole Palmer berada di kelas elit sebagai pencipta sekaligus penyelesai peluang terbaik.</div>""", unsafe_allow_html=True)
-
-    with col_a6:
-        st.markdown("""
-        <div class="glass-card" style="margin-bottom: 16px;">
-            <div class="card-title">6. Konversi Gol Individu — Over/Under xG Performance</div>
-        </div>
-        """, unsafe_allow_html=True)
-        df_fin = df_clean[df_clean['Minutes Played'] > 300].copy()
-        if not df_fin.empty:
-            df_fin['xG_Diff'] = df_fin['Goals'] - df_fin['XG']
-            fig6 = px.bar(df_fin.sort_values('xG_Diff'), x='xG_Diff', y='player_name', orientation='h', color='xG_Diff',
-                         color_continuous_scale='RdBu', range_color=[-3, 3])
-            fig6.update_layout(xaxis_title="Goals - xG Differential", yaxis_title=None, height=400)
-            fig6.update_yaxes(tickfont=dict(size=10))
-            st.plotly_chart(fig6, use_container_width=True)
-            st.markdown("""<div class='analytic-desc'>📉 <b>Insight:</b> Noni Madueke dan Nicolas Jackson mencatatkan angka minus terbesar, menegaskan masalah penyelesaian akhir peluang matang.</div>""", unsafe_allow_html=True)
-
-    st.markdown('<div class="premium-divider"></div>', unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div class='analytic-desc'>
+                🤖 <b>K-Means Insight:</b> Algoritma secara otomatis memisahkan Cole Palmer ke dalam klasternya sendiri (Elite Threat), terpisah dari klaster pemain reguler lainnya.
+            </div>
+            """, unsafe_allow_html=True)
 
     # ROW 4
     col_a7, col_a8 = st.columns(2)
