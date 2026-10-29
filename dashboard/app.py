@@ -1062,6 +1062,23 @@ with tab_analytics:
                 🤖 <b>K-Means Insight:</b> Algoritma secara otomatis memisahkan Cole Palmer ke dalam klasternya sendiri (Elite Threat), terpisah dari klaster pemain reguler lainnya.
             </div>
             """, unsafe_allow_html=True)
+    with col_a6:
+        st.markdown("""
+        <div class="glass-card" style="margin-bottom: 16px;">
+            <div class="card-title">6. Konversi Gol Individu — Over/Under xG Performance</div>
+        </div>
+        """, unsafe_allow_html=True)
+        df_fin = df_clean[df_clean['Minutes Played'] > 300].copy()
+        if not df_fin.empty:
+            df_fin['xG_Diff'] = df_fin['Goals'] - df_fin['XG']
+            fig6 = px.bar(df_fin.sort_values('xG_Diff'), x='xG_Diff', y='player_name', orientation='h', color='xG_Diff',
+                         color_continuous_scale='RdBu', range_color=[-3, 3])
+            fig6.update_layout(xaxis_title="Goals - xG Differential", yaxis_title=None, height=400)
+            fig6.update_yaxes(tickfont=dict(size=10))
+            st.plotly_chart(fig6, use_container_width=True)
+            st.markdown("""<div class='analytic-desc'>📉 <b>Insight:</b> Noni Madueke dan Nicolas Jackson mencatatkan angka minus terbesar, menegaskan masalah penyelesaian akhir peluang matang.</div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="premium-divider"></div>', unsafe_allow_html=True)
 
     # ROW 4
     col_a7, col_a8 = st.columns(2)
